@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><link rel="shortcut icon" href=http://dhanangw.github.io/favicon.ico><link rel=stylesheet href=/css/style.min.css><title>Dummy Self-Populating MySQL Table</title></head><body><header id=banner><h2><a href=http://dhanangw.github.io/>dhanangw writings</a></h2><nav><ul></ul></nav></header><main id=content><article><header id=post-header><h1>Dummy Self-Populating MySQL Table</h1><div><time>March 23, 2024</time></div></header><h1 id=requirements>Requirements:</h1><ol><li>Docker</li></ol><h1 id=steps>Steps:</h1><ol><li>Run MySQL server on Docker:<div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>docker image pull mysql:8.3.0;
+
+docker run --name mysql-local --detach --publish 3306:3306 --env MYSQL_ALLOW_EMPTY_PASSWORD<span style=color:#f92672>=</span>true mysql:8.3.0;
+</code></pre></div></li><li>Connect to MySQL server:<div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash>mysql --host 127.0.0.1 --port <span style=color:#ae81ff>3306</span> --username root -p
+</code></pre></div></li><li>create table that contains all data types of MySQL:<div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-sql data-lang=sql><span style=color:#75715e>-- Create dummy database
+</span><span style=color:#75715e></span><span style=color:#66d9ef>CREATE</span> <span style=color:#66d9ef>DATABASE</span> dummy_database;
+USE dummy_database;
+
+<span style=color:#75715e>-- Create dummy table
+</span><span style=color:#75715e></span><span style=color:#66d9ef>CREATE</span> <span style=color:#66d9ef>TABLE</span> <span style=color:#66d9ef>IF</span> <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>EXISTS</span> dummy_table (
+ id BIGINT <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span> AUTO_INCREMENT <span style=color:#66d9ef>PRIMARY</span> <span style=color:#66d9ef>KEY</span>,
+ integer_column BIGINT <span style=color:#66d9ef>DEFAULT</span> (FLOOR(<span style=color:#ae81ff>100000</span> <span style=color:#f92672>+</span> RAND() <span style=color:#f92672>*</span> <span style=color:#ae81ff>5000000000</span>)),
+ fixed_decimal_column DECIMAL(<span style=color:#ae81ff>10</span>,<span style=color:#ae81ff>9</span>) <span style=color:#66d9ef>DEFAULT</span> (RAND() <span style=color:#f92672>*</span> RAND()),
+ approximate_decimal_column DOUBLE <span style=color:#66d9ef>DEFAULT</span> (RAND() <span style=color:#f92672>*</span> RAND()),
+ bytes_column BINARY(<span style=color:#ae81ff>16</span>) <span style=color:#66d9ef>DEFAULT</span> (UNHEX(<span style=color:#66d9ef>REPLACE</span>(UUID(), <span style=color:#e6db74>&#39;-&#39;</span>, <span style=color:#e6db74>&#39;&#39;</span>))),
+ string_column TEXT <span style=color:#66d9ef>DEFAULT</span> (<span style=color:#66d9ef>SUBSTRING</span>(MD5(RAND()),<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>20</span>)),
+ spatial_column POINT <span style=color:#66d9ef>DEFAULT</span> (POINT(FLOOR(RAND()<span style=color:#f92672>*</span>(<span style=color:#ae81ff>70</span><span style=color:#f92672>-</span><span style=color:#ae81ff>10</span><span style=color:#f92672>+</span><span style=color:#ae81ff>1</span>))<span style=color:#f92672>+</span><span style=color:#ae81ff>10</span>, FLOOR(RAND()<span style=color:#f92672>*</span>(<span style=color:#ae81ff>70</span><span style=color:#f92672>-</span><span style=color:#ae81ff>10</span><span style=color:#f92672>+</span><span style=color:#ae81ff>1</span>))<span style=color:#f92672>+</span><span style=color:#ae81ff>10</span>)),
+ json_column JSON <span style=color:#66d9ef>DEFAULT</span> (JSON_ARRAY()),
+ created_at <span style=color:#66d9ef>TIMESTAMP</span> <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>NULL</span> <span style=color:#66d9ef>DEFAULT</span> <span style=color:#66d9ef>CURRENT_TIMESTAMP</span>,
+ updated_at <span style=color:#66d9ef>TIMESTAMP</span> <span style=color:#66d9ef>NULL</span> <span style=color:#66d9ef>DEFAULT</span> <span style=color:#66d9ef>CURRENT_TIMESTAMP</span> <span style=color:#66d9ef>ON</span> <span style=color:#66d9ef>UPDATE</span> <span style=color:#66d9ef>CURRENT_TIMESTAMP</span>
+);
+</code></pre></div></li><li>Create a Stored Procedure that will automatically populates <code>dummy_database.dummy_table</code>:<div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-sql data-lang=sql><span style=color:#75715e>-- Create Stored Procedure.
+</span><span style=color:#75715e>-- more info: https://dev.mysql.com/doc/refman/8.3/en/create-procedure.html
+</span><span style=color:#75715e></span><span style=color:#66d9ef>delimiter</span> <span style=color:#f92672>//</span>
+
+<span style=color:#75715e>-- docs: https://dev.mysql.com/doc/refman/8.3/en/sql-compound-statements.html
+</span><span style=color:#75715e></span><span style=color:#66d9ef>CREATE</span> <span style=color:#66d9ef>PROCEDURE</span> <span style=color:#66d9ef>IF</span> <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>EXISTS</span> auto_populate_dummy_table()
+<span style=color:#66d9ef>BEGIN</span>
+ <span style=color:#66d9ef>DECLARE</span> maxId INT;
+ <span style=color:#66d9ef>DECLARE</span> maxCountIdThreshold INT;
+ <span style=color:#66d9ef>SET</span> maxCountIdThreshold <span style=color:#f92672>=</span> <span style=color:#ae81ff>100000</span>;
+ <span style=color:#66d9ef>SELECT</span> <span style=color:#66d9ef>MAX</span>(id) <span style=color:#66d9ef>FROM</span> dummy_table <span style=color:#66d9ef>INTO</span> <span style=color:#f92672>@</span>maxId;
+
+ <span style=color:#66d9ef>IF</span> maxId <span style=color:#f92672>&lt;=</span> maxCountIdThreshold <span style=color:#66d9ef>OR</span> maxId <span style=color:#66d9ef>IS</span> <span style=color:#66d9ef>NULL</span> <span style=color:#66d9ef>THEN</span> 
+   <span style=color:#66d9ef>INSERT</span> <span style=color:#66d9ef>INTO</span> dummy_database.dummy_table () <span style=color:#66d9ef>VALUES</span> ();
+ <span style=color:#66d9ef>ELSE</span>
+   <span style=color:#66d9ef>UPDATE</span> dummy_database.dummy_table <span style=color:#66d9ef>SET</span> 
+     integer_column <span style=color:#f92672>=</span> (FLOOR(<span style=color:#ae81ff>100000</span> <span style=color:#f92672>+</span> RAND() <span style=color:#f92672>*</span> <span style=color:#ae81ff>5000000000</span>)),
+     fixed_decimal_column <span style=color:#f92672>=</span> (RAND() <span style=color:#f92672>*</span> RAND()),
+     approximate_decimal_column <span style=color:#f92672>=</span> (RAND() <span style=color:#f92672>*</span> RAND())
+   <span style=color:#66d9ef>WHERE</span> id <span style=color:#f92672>=</span> FLOOR(RAND()<span style=color:#f92672>*</span>(maxCountIdThreshold<span style=color:#f92672>-</span><span style=color:#ae81ff>1</span><span style=color:#f92672>+</span><span style=color:#ae81ff>1</span>))<span style=color:#f92672>+</span><span style=color:#ae81ff>1</span>;
+ <span style=color:#66d9ef>END</span> <span style=color:#66d9ef>IF</span>;
+<span style=color:#66d9ef>END</span> <span style=color:#f92672>//</span>
+
+<span style=color:#66d9ef>delimiter</span> ;
+
+<span style=color:#75715e>-- Check created procedure
+</span><span style=color:#75715e></span><span style=color:#66d9ef>SHOW</span> <span style=color:#66d9ef>PROCEDURE</span> STATUS <span style=color:#66d9ef>WHERE</span> DB <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;dummy_database&#39;</span>;
+
+<span style=color:#75715e>-- Test run
+</span><span style=color:#75715e></span><span style=color:#66d9ef>CALL</span> auto_populate_dummy_table();
+</code></pre></div></li><li>Turn on <a href=https://dev.mysql.com/doc/refman/8.0/en/event-scheduler.html>Event Scheduler</a>:<div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-sql data-lang=sql><span style=color:#75715e>-- Turn on Event Scheduler
+</span><span style=color:#75715e></span><span style=color:#66d9ef>SET</span> <span style=color:#66d9ef>GLOBAL</span> event_scheduler <span style=color:#f92672>=</span> <span style=color:#66d9ef>ON</span>; <span style=color:#75715e>-- set to OFF to turn off Event Scheduler.
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>-- Check Event Scheduler is turned on.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>SHOW</span> PROCESSLIST;
+</code></pre></div></li><li>Create scheduled event to run the stored procedure:<div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-sql data-lang=sql><span style=color:#75715e>-- Schedule auto_populate procedure.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>CREATE</span> EVENT <span style=color:#66d9ef>IF</span> <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>EXISTS</span> scheduled_auto_populate_dummy_table 
+ <span style=color:#66d9ef>ON</span> SCHEDULE <span style=color:#66d9ef>EVERY</span> <span style=color:#ae81ff>30</span> <span style=color:#66d9ef>SECOND</span> 
+ <span style=color:#66d9ef>ON</span> <span style=color:#66d9ef>COMPLETION</span> <span style=color:#66d9ef>PRESERVE</span>
+ ENABLE
+ <span style=color:#66d9ef>DO</span>
+   <span style=color:#66d9ef>CALL</span> auto_populate_dummy_table();
+
+<span style=color:#75715e>-- Check event
+</span><span style=color:#75715e></span><span style=color:#66d9ef>SHOW</span> EVENTS;
+</code></pre></div></li><li>Periodically checks <code>dummy_database.dummy_table</code> if it&rsquo;s get populated:<div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-sql data-lang=sql><span style=color:#66d9ef>SELECT</span> <span style=color:#66d9ef>COUNT</span>(id) <span style=color:#66d9ef>FROM</span> dummy_databse.dummy_table;
+</code></pre></div></li></ol></article></main><footer id=footer></footer></body></html>
